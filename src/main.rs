@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::collections::HashMap;
 use std::fmt;
-use std::hash::Hash;
+use std::hash::{Hash, Hasher};
 
 #[derive(PartialEq)]
 struct MinNonNan(f64);
@@ -21,29 +21,75 @@ impl Ord for MinNonNan {
     }
 }
 
-#[derive(Eq, PartialEq, Hash, PartialOrd, Ord, Clone, Copy, Debug)]
-struct Vertex {
+#[derive(Debug)]
+struct Vertex<T>
+where T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy {
     id: usize,
-    value: &'static str,
+    value: T,
 }
 
-struct Edge {
-    to: Vertex,
+impl<T> Ord for Vertex<T>
+where T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.id.cmp(&other.id)
+    }
+}
+
+impl<T> PartialOrd for Vertex<T> 
+where T: Ord + PartialOrd + Eq + PartialEq + Clone  + Copy {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<T> Clone for Vertex<T> 
+where T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy{
+    fn clone(&self) -> Self {
+        Vertex { id: self.id, value: self.value.clone() }
+    }
+}
+
+impl<T> Copy for Vertex<T>
+where T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy {}
+
+impl<T> Eq for Vertex<T> 
+where T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy{}
+
+impl<T> PartialEq for Vertex<T> 
+where T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl<T> Hash for Vertex<T>
+where T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
+}
+
+struct Edge<T> 
+where T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy {
+    to: Vertex<T>,
     cost: f64,
 }
 
-impl Edge {
-    fn new(to: Vertex, cost: f64) -> Self {
+impl<T> Edge<T>
+where T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy{
+    fn new(to: Vertex<T>, cost: f64) -> Self {
         Self { to, cost }
     }
 }
 
-struct Graph {
-    graph: HashMap<Vertex, Vec<Edge>>,
+struct Graph<T>
+where T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy {
+    graph: HashMap<Vertex<T>, Vec<Edge<T>>>,
     head: usize,
 }
 
-impl Graph {
+impl<T> Graph<T>
+where T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy {
     fn new() -> Self {
         Self {
             graph: HashMap::new(),
@@ -51,8 +97,8 @@ impl Graph {
         }
     }
 
-    fn add_vertex(&mut self, value: &'static str) -> usize {
-        let vertex = Vertex {
+    fn add_vertex(&mut self, value: T) -> usize {
+        let vertex = Vertex::<T> {
             id: self.head,
             value,
         };
@@ -61,7 +107,7 @@ impl Graph {
         self.head - 1
     }
 
-    fn get_vertex(&self, id: usize) -> &Vertex {
+    fn get_vertex(&self, id: usize) -> &Vertex<T> {
         self.graph
             .iter()
             .find(|(key, _)| key.id == id)
@@ -77,11 +123,11 @@ impl Graph {
             .push(edge);
     }
 
-    fn get_shortest_path(&self, from: usize, to: usize) -> (Vec<Vertex>, f64) {
-        let start = *self.get_vertex(from);
-        let end = *self.get_vertex(to);
+    fn get_shortest_path(&self, from: usize, to: usize) -> (Vec<Vertex<T>>, f64) {
+        let start = self.get_vertex(from);
+        let end = self.get_vertex(to);
 
-        let (prev, distance) = self.dijkstra(start, end);
+        let (prev, distance, start, end) = self.dijkstra(*start, *end);
 
         let mut path = Vec::new();
         let mut at = end;
@@ -95,31 +141,29 @@ impl Graph {
         (path, distance)
     }
 
-    fn dijkstra(&self, start: Vertex, end: Vertex) -> (Vec<Option<Vertex>>, f64) {
+    fn dijkstra(&self, start: Vertex<T>, end: Vertex<T>) -> (Vec<Option<Vertex<T>>>, f64, Vertex<T>, Vertex<T>) {
         let mut dist = vec![f64::INFINITY; self.graph.len()];
         dist[start.id] = 0.0;
-
+    
         let mut queue = BinaryHeap::new();
         queue.push((MinNonNan(0.0), start));
-
+    
         let mut visited = vec![false; self.graph.len()];
-        let mut prev: Vec<Option<Vertex>> = vec![None; self.graph.len()];
-
-        while !queue.is_empty() {
-            let (current_cost, current) = queue.pop().unwrap();
-
+        let mut prev: Vec<Option<Vertex<T>>> = vec![None; self.graph.len()];
+    
+        while let Some((current_cost, current)) = queue.pop() {
             visited[current.id] = true;
-
+    
             if dist[current.id] < current_cost.0 {
                 continue;
             }
-
+    
             let edges = self.graph.get(&current).unwrap();
             for edge in edges {
                 if visited[edge.to.id] {
                     continue;
                 }
-
+    
                 let new_dist = dist[current.id] + edge.cost;
                 if new_dist < dist[edge.to.id] {
                     prev[edge.to.id] = Some(current);
@@ -128,15 +172,16 @@ impl Graph {
                 }
             }
             if current.id == end.id {
-                return (prev, dist[end.id]);
+                return (prev, dist[end.id], start, end);
             }
         }
-
-        (prev, f64::INFINITY)
+    
+        (prev, f64::INFINITY, start, end)
     }
-}
+}    
 
-impl fmt::Display for Graph {
+impl<T: fmt::Display> fmt::Display for Graph<T> 
+where T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut graph_string: String = String::new();
         for (key, value) in &self.graph {
@@ -152,13 +197,13 @@ impl fmt::Display for Graph {
 }
 
 fn main() {
-    let mut graph = Graph::new();
+    let mut graph = Graph::<&'static str>::new();
 
-    let a = graph.add_vertex("A");
-    let b = graph.add_vertex("B");
-    let c = graph.add_vertex("C");
-    let d = graph.add_vertex("D");
-    let e = graph.add_vertex("E");
+    let a = graph.add_vertex(&"A");
+    let b = graph.add_vertex(&"B");
+    let c = graph.add_vertex(&"C");
+    let d = graph.add_vertex(&"D");
+    let e = graph.add_vertex(&"E");
 
     graph.add_edge(a, b, 1.0);
     graph.add_edge(a, c, 3.0);
