@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::collections::HashMap;
-use std::fmt;
+use std::fmt::{Display, Formatter, Result};
 use std::hash::{Hash, Hasher};
 
 #[derive(PartialEq)]
@@ -21,75 +21,92 @@ impl Ord for MinNonNan {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Eq)]
 struct Vertex<T>
-where T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy {
+where
+    T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy,
+{
     id: usize,
     value: T,
 }
 
 impl<T> Ord for Vertex<T>
-where T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy {
+where
+    T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy,
+{
     fn cmp(&self, other: &Self) -> Ordering {
         self.id.cmp(&other.id)
     }
 }
 
-impl<T> PartialOrd for Vertex<T> 
-where T: Ord + PartialOrd + Eq + PartialEq + Clone  + Copy {
+impl<T> PartialOrd for Vertex<T>
+where
+    T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy,
+{
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<T> Clone for Vertex<T> 
-where T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy{
+impl<T> Clone for Vertex<T>
+where
+    T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy,
+{
     fn clone(&self) -> Self {
-        Vertex { id: self.id, value: self.value.clone() }
+        Vertex {
+            id: self.id,
+            value: self.value.clone(),
+        }
     }
 }
 
-impl<T> Copy for Vertex<T>
-where T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy {}
-
-impl<T> Eq for Vertex<T> 
-where T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy{}
-
-impl<T> PartialEq for Vertex<T> 
-where T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy {
+impl<T> PartialEq for Vertex<T>
+where
+    T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy,
+{
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
     }
 }
 
 impl<T> Hash for Vertex<T>
-where T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy {
+where
+    T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy,
+{
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.id.hash(state);
     }
 }
 
-struct Edge<T> 
-where T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy {
+struct Edge<T>
+where
+    T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy,
+{
     to: Vertex<T>,
     cost: f64,
 }
 
 impl<T> Edge<T>
-where T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy{
+where
+    T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy,
+{
     fn new(to: Vertex<T>, cost: f64) -> Self {
         Self { to, cost }
     }
 }
 
 struct Graph<T>
-where T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy {
+where
+    T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy,
+{
     graph: HashMap<Vertex<T>, Vec<Edge<T>>>,
     head: usize,
 }
 
 impl<T> Graph<T>
-where T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy {
+where
+    T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy,
+{
     fn new() -> Self {
         Self {
             graph: HashMap::new(),
@@ -141,29 +158,33 @@ where T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy {
         (path, distance)
     }
 
-    fn dijkstra(&self, start: Vertex<T>, end: Vertex<T>) -> (Vec<Option<Vertex<T>>>, f64, Vertex<T>, Vertex<T>) {
+    fn dijkstra(
+        &self,
+        start: Vertex<T>,
+        end: Vertex<T>,
+    ) -> (Vec<Option<Vertex<T>>>, f64, Vertex<T>, Vertex<T>) {
         let mut dist = vec![f64::INFINITY; self.graph.len()];
         dist[start.id] = 0.0;
-    
+
         let mut queue = BinaryHeap::new();
         queue.push((MinNonNan(0.0), start));
-    
+
         let mut visited = vec![false; self.graph.len()];
         let mut prev: Vec<Option<Vertex<T>>> = vec![None; self.graph.len()];
-    
+
         while let Some((current_cost, current)) = queue.pop() {
             visited[current.id] = true;
-    
+
             if dist[current.id] < current_cost.0 {
                 continue;
             }
-    
+
             let edges = self.graph.get(&current).unwrap();
             for edge in edges {
                 if visited[edge.to.id] {
                     continue;
                 }
-    
+
                 let new_dist = dist[current.id] + edge.cost;
                 if new_dist < dist[edge.to.id] {
                     prev[edge.to.id] = Some(current);
@@ -175,17 +196,19 @@ where T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy {
                 return (prev, dist[end.id], start, end);
             }
         }
-    
+
         (prev, f64::INFINITY, start, end)
     }
-}    
+}
 
-impl<T: fmt::Display> fmt::Display for Graph<T> 
-where T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl<T: Display> Display for Graph<T>
+where
+    T: Ord + PartialOrd + Eq + PartialEq + Clone + Copy,
+{
+    fn fmt(&self, f: &mut Formatter) -> Result {
         let mut graph_string: String = String::new();
         for (key, value) in &self.graph {
-            graph_string += format!("[{}] ->", key.value).as_str();
+            graph_string += format!("[{}] -> ", key.value).as_str();
             for edge in value {
                 graph_string += format!("[{} ({})]", edge.to.value, edge.cost).as_str();
             }
@@ -222,4 +245,14 @@ fn main() {
         "The shortest path has value of {} and leads via {:?}",
         shortest_path.1, shortest_path.0
     );
+
+    /*
+    Output:    
+    [D] -> [E (4)]
+    [C] -> [D (1)][E (3)]
+    [A] -> [B (1)][C (3)]
+    [B] -> [D (2)][E (8)][C (1)]
+    [E] -> [C (3)]
+    The shortest path has value of 5 and leads via [Vertex { id: 0, value: "A" }, Vertex { id: 1, value: "B" }, Vertex { id: 2, value: "C" }, Vertex { id: 4, value: "E" }]
+    */
 }
